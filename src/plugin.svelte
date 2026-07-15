@@ -1,40 +1,57 @@
-<div class="plugin__mobile-header">{title}</div>
-<section class="plugin__content zanka-panel" bind:this={panelContentRoot}>
-    <div class="plugin__title plugin__title--chevron-back" on:click={() => bcast.emit('rqstOpen', 'menu')}>
-        {title}
-    </div>
+<div class="zanka-embedded-host">
+    <button
+        class="zanka-settings-fab"
+        class:is-open={settingsOpen}
+        style:left={`${settingsPosition.x}px`}
+        style:top={`${settingsPosition.y}px`}
+        type="button"
+        title={settingsOpen ? 'Beállítások elrejtése' : 'Beállítások megjelenítése'}
+        aria-label={settingsOpen ? 'Beállítások elrejtése' : 'Beállítások megjelenítése'}
+        on:click={() => settingsOpen = !settingsOpen}
+    >
+        {settingsOpen ? '×' : '⚙'}
+    </button>
 
-    <div class="status-row">
-        <span class:online={dataOnline} class:offline={!dataOnline}></span>
-        <span>{dataOnline ? 'OKF viharjelzési adatkapcsolat' : 'Viharjelzési adat nem érhető el'}</span>
-        <button class="icon-button" title="Hang be/ki" on:click={() => muted = !muted}>{muted ? '🔇' : '🔊'}</button>
-    </div>
+    {#if settingsOpen}
+        <section class="zanka-panel zanka-floating-settings" bind:this={panelContentRoot} style:left={`${settingsPosition.x}px`} style:top={`${settingsPosition.y}px`}>
+            <div class="zanka-panel-title zanka-drag-handle" on:pointerdown={(event) => startDrag('settings', event)}>
+                <span>{title}</span>
+                <button type="button" title="Panel összecsukása" aria-label="Panel összecsukása" on:click={() => settingsOpen = false}>×</button>
+            </div>
 
-    <div class="sound-tests">
-        <span>Hangteszt:</span>
-        <button on:click={() => testSound(0)}>0</button>
-        <button on:click={() => testSound(1)}>I</button>
-        <button on:click={() => testSound(2)}>II</button>
-    </div>
+            <div class="status-row">
+                <span class:online={dataOnline} class:offline={!dataOnline}></span>
+                <span>{dataOnline ? 'OKF viharjelzési adatkapcsolat' : 'Viharjelzési adat nem érhető el'}</span>
+                <button class="icon-button" title="Hang be/ki" on:click={() => muted = !muted}>{muted ? '🔇' : '🔊'}</button>
+            </div>
 
-    <div class="camp-actions">
-        <button class="action" on:click={focusCamp}>Tábor középre</button>
-        <button class="action" on:click={toggleRange}>{rangeVisible ? '30 km-es kör elrejtése' : '30 km-es kör mutatása'}</button>
-        <button class="action" on:click={toggleBasinIcons}>{basinIconsVisible ? 'Viharjelző ikonok elrejtése' : 'Viharjelző ikonok mutatása'}</button>
-    </div>
+            <div class="sound-tests">
+                <span>Hangteszt:</span>
+                <button on:click={() => testSound(0)}>0</button>
+                <button on:click={() => testSound(1)}>I</button>
+                <button on:click={() => testSound(2)}>II</button>
+            </div>
 
-    <div class="section-title">Dynamic Island teszt</div>
-    <div class="notification-tests">
-        <button on:click={() => enqueueTest('storm1')}>I. fok</button>
-        <button on:click={() => enqueueTest('storm2')}>II. fok</button>
-        <button on:click={() => enqueueTest('zone')}>30 km-es zóna</button>
-        <button on:click={() => enqueueTest('camp')}>Tábor érintett</button>
-        <button on:click={() => enqueueTest('fire')}>Tűztilalom</button>
-        <button on:click={() => enqueueTest('met')}>HungaroMet</button>
-    </div>
+            <div class="camp-actions">
+                <button class="action" on:click={focusCamp}>Tábor középre</button>
+                <button class="action" on:click={toggleRange}>{rangeVisible ? '30 km-es kör elrejtése' : '30 km-es kör mutatása'}</button>
+                <button class="action" on:click={toggleBasinIcons}>{basinIconsVisible ? 'Viharjelző ikonok elrejtése' : 'Viharjelző ikonok mutatása'}</button>
+            </div>
 
-    <div class="updated">Viharjelzés: {lastUpdated || '—'} · Tűztilalom: {fireUpdated || '—'}</div>
-</section>
+            <div class="section-title">Dynamic Island teszt</div>
+            <div class="notification-tests">
+                <button on:click={() => enqueueTest('storm1')}>I. fok</button>
+                <button on:click={() => enqueueTest('storm2')}>II. fok</button>
+                <button on:click={() => enqueueTest('zone')}>30 km-es zóna</button>
+                <button on:click={() => enqueueTest('camp')}>Tábor érintett</button>
+                <button on:click={() => enqueueTest('fire')}>Tűztilalom</button>
+                <button on:click={() => enqueueTest('met')}>HungaroMet</button>
+            </div>
+
+            <div class="updated">Viharjelzés: {lastUpdated || '—'} · Tűztilalom: {fireUpdated || '—'}</div>
+        </section>
+    {/if}
+</div>
 
 <script lang="ts">
     import bcast from '@windy/broadcast';
@@ -74,6 +91,8 @@
     type WeatherData = { temperature: number | null; humidity: number | null; windSpeed: number | null; windDirection: number | null; pressure: number | null; updated: string; online: boolean };
     type LightningStrike = { lat: number; lon: number; time: number; distanceKm: number };
     type LightningData = { nearestKm: number | null; count30m30km: number; updated: string; online: boolean };
+    type Point = { x: number; y: number };
+    type DragTarget = 'top' | 'weather' | 'settings' | null;
 
     let basins: Basin[] = [
         { key: 'west', name: 'Nyugati medence', level: 0 },
@@ -81,6 +100,14 @@
         { key: 'east', name: 'Keleti medence', level: 0 },
     ];
 
+    let settingsOpen = true;
+    let weatherOpen = true;
+    let settingsPosition: Point = { x: 18, y: 520 };
+    let topPosition: Point | null = null;
+    let weatherPosition: Point = { x: 18, y: 82 };
+    let dragTarget: DragTarget = null;
+    let dragStartPointer: Point = { x: 0, y: 0 };
+    let dragStartElement: Point = { x: 0, y: 0 };
     let dataOnline = false;
     let lastUpdated = '';
     let fireUpdated = '';
@@ -105,6 +132,7 @@
     let basinRoot: HTMLDivElement | null = null;
     let brandRoot: HTMLImageElement | null = null;
     let weatherRoot: HTMLDivElement | null = null;
+    let weatherFabRoot: HTMLButtonElement | null = null;
     let panelContentRoot: HTMLElement | null = null;
     let portalStyle: HTMLStyleElement | null = null;
     let bodyObserver: MutationObserver | null = null;
@@ -476,12 +504,110 @@
         return value === null || !Number.isFinite(value) ? '—' : value.toFixed(digits);
     }
 
+    function readSavedPoint(key: string, fallback: Point): Point {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+            if (Number.isFinite(parsed?.x) && Number.isFinite(parsed?.y)) return { x: parsed.x, y: parsed.y };
+        } catch { /* use fallback */ }
+        return fallback;
+    }
+
+    function savePoint(key: string, point: Point | null) {
+        try {
+            if (point) localStorage.setItem(key, JSON.stringify(point));
+            else localStorage.removeItem(key);
+        } catch { /* storage unavailable */ }
+    }
+
+    function clampPoint(point: Point, width: number, height: number): Point {
+        return {
+            x: Math.max(8, Math.min(window.innerWidth - width - 8, point.x)),
+            y: Math.max(8, Math.min(window.innerHeight - height - 8, point.y)),
+        };
+    }
+
+    function startDrag(target: Exclude<DragTarget, null>, event: PointerEvent) {
+        const element = event.target as HTMLElement;
+        if (element.closest('button')) return;
+        event.preventDefault();
+        dragTarget = target;
+        dragStartPointer = { x: event.clientX, y: event.clientY };
+        if (target === 'top' && islandRoot) {
+            const rect = islandRoot.getBoundingClientRect();
+            dragStartElement = { x: rect.left + rect.width / 2, y: rect.top };
+        } else if (target === 'weather' && weatherRoot) {
+            const rect = weatherRoot.getBoundingClientRect();
+            dragStartElement = { x: rect.left, y: rect.top };
+        } else {
+            dragStartElement = { ...settingsPosition };
+        }
+        document.documentElement.classList.add('zanka-is-dragging');
+        window.addEventListener('pointermove', handleDragMove, { passive: false });
+        window.addEventListener('pointerup', finishDrag, { once: true });
+        window.addEventListener('pointercancel', finishDrag, { once: true });
+    }
+
+    function handleDragMove(event: PointerEvent) {
+        if (!dragTarget) return;
+        event.preventDefault();
+        const dx = event.clientX - dragStartPointer.x;
+        const dy = event.clientY - dragStartPointer.y;
+        if (dragTarget === 'top') {
+            const halfWidth = Math.max(BASE_ISLAND_WIDTH, islandRoot?.getBoundingClientRect().width || BASE_ISLAND_WIDTH) / 2;
+            topPosition = {
+                x: Math.max(halfWidth + 8, Math.min(window.innerWidth - halfWidth - 8, dragStartElement.x + dx)),
+                y: Math.max(8, Math.min(window.innerHeight - 115, dragStartElement.y + dy)),
+            };
+            savePoint('zanka.topPosition', topPosition);
+            applyTopPosition();
+        } else if (dragTarget === 'weather' && weatherRoot) {
+            weatherPosition = clampPoint({ x: dragStartElement.x + dx, y: dragStartElement.y + dy }, weatherRoot.offsetWidth || 224, weatherRoot.offsetHeight || 360);
+            savePoint('zanka.weatherPosition', weatherPosition);
+            applyWeatherPosition();
+        } else if (dragTarget === 'settings') {
+            const panel = panelContentRoot;
+            settingsPosition = clampPoint({ x: dragStartElement.x + dx, y: dragStartElement.y + dy }, panel?.offsetWidth || 320, panel?.offsetHeight || 300);
+            savePoint('zanka.settingsPosition', settingsPosition);
+        }
+    }
+
+    function finishDrag() {
+        dragTarget = null;
+        document.documentElement.classList.remove('zanka-is-dragging');
+        window.removeEventListener('pointermove', handleDragMove);
+    }
+
+    function applyTopPosition() {
+        if (!topPosition || !islandRoot || !basinRoot) return;
+        islandRoot.style.left = `${Math.round(topPosition.x)}px`;
+        islandRoot.style.top = `${Math.round(topPosition.y)}px`;
+        basinRoot.style.left = `${Math.round(topPosition.x)}px`;
+        basinRoot.style.top = `${Math.round(topPosition.y + ISLAND_HEIGHT + 10)}px`;
+    }
+
+    function applyWeatherPosition() {
+        const target = weatherOpen ? weatherRoot : weatherFabRoot;
+        if (!target) return;
+        const width = target.offsetWidth || (weatherOpen ? 224 : 42);
+        const height = target.offsetHeight || (weatherOpen ? 360 : 42);
+        weatherPosition = clampPoint(weatherPosition, width, height);
+        target.style.left = `${Math.round(weatherPosition.x)}px`;
+        target.style.top = `${Math.round(weatherPosition.y)}px`;
+    }
+
+    function setWeatherOpen(open: boolean) {
+        weatherOpen = open;
+        if (weatherRoot) weatherRoot.style.display = open ? 'block' : 'none';
+        if (weatherFabRoot) weatherFabRoot.style.display = open ? 'none' : 'flex';
+        requestAnimationFrame(applyWeatherPosition);
+    }
+
     function renderWeatherPanel() {
         if (!weatherRoot) return;
         const direction = compassDirection(weatherData.windDirection);
         const directionDegrees = weatherData.windDirection === null ? '' : ` (${Math.round(weatherData.windDirection)}°)`;
         weatherRoot.innerHTML = `
-            <div class="zanka-weather-title">TÁBOR – AKTUÁLIS IDŐJÁRÁS</div>
+            <div class="zanka-weather-title zanka-drag-handle"><span>TÁBOR – AKTUÁLIS IDŐJÁRÁS</span><button type="button" class="zanka-weather-close" title="Összecsukás" aria-label="Összecsukás">×</button></div>
             <div class="zanka-weather-row"><img src="${asset('weather-temperature.svg')}" alt=""><span>Hőmérséklet</span><strong>${formatWeatherValue(weatherData.temperature, 1)} °C</strong></div>
             <div class="zanka-weather-row"><img src="${asset('weather-humidity.svg')}" alt=""><span>Páratartalom</span><strong>${formatWeatherValue(weatherData.humidity)} %</strong></div>
             <div class="zanka-weather-row"><img src="${asset('weather-direction.svg')}" alt=""><span>Szélirány</span><strong>${direction}${directionDegrees}</strong></div>
@@ -492,6 +618,9 @@
             <div class="zanka-weather-row zanka-lightning-row"><img src="${asset('weather-lightning.svg')}" alt=""><span>Villámlások száma</span><strong>${lightningData.count30m30km} db</strong><small>30 km / 30 perc</small></div>
             <div class="zanka-weather-footer"><span>${weatherData.online ? `Időjárás: ${weatherData.updated}` : 'Időjárási adat nem érhető el'} · ${lightningData.online ? `Villám: ${lightningData.updated || 'élő'}` : 'Villám: kapcsolódás…'}</span><button type="button" class="zanka-weather-refresh" aria-label="Frissítés">↻</button></div>`;
         weatherRoot.querySelector('.zanka-weather-refresh')?.addEventListener('click', () => void loadLocalWeather());
+        weatherRoot.querySelector('.zanka-weather-close')?.addEventListener('click', () => setWeatherOpen(false));
+        weatherRoot.querySelector('.zanka-weather-title')?.addEventListener('pointerdown', event => startDrag('weather', event as PointerEvent));
+        setWeatherOpen(weatherOpen);
     }
 
     async function loadLocalWeather() {
@@ -522,7 +651,8 @@
         portalStyle = document.createElement('style');
         portalStyle.id = 'zanka-portal-style';
         portalStyle.textContent = `
-            #zanka-dynamic-island{--island-width:${BASE_ISLAND_WIDTH}px;position:fixed;z-index:2147483000;width:var(--island-width);height:${ISLAND_HEIGHT}px;left:50%;top:88px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:0 13px;box-sizing:border-box;border-radius:999px;background:#050505;color:#fff;box-shadow:0 7px 22px rgba(0,0,0,.42),inset 0 0 0 1px rgba(255,255,255,.09);font:600 13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:nowrap;overflow:hidden;transition:width .42s cubic-bezier(.22,.9,.25,1),box-shadow .25s ease;pointer-events:none}
+            #zanka-dynamic-island{--island-width:${BASE_ISLAND_WIDTH}px;position:fixed;z-index:2147483000;width:var(--island-width);height:${ISLAND_HEIGHT}px;left:50%;top:88px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:0 13px;box-sizing:border-box;border-radius:999px;background:#050505;color:#fff;box-shadow:0 7px 22px rgba(0,0,0,.42),inset 0 0 0 1px rgba(255,255,255,.09);font:600 13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:nowrap;overflow:hidden;transition:width .42s cubic-bezier(.22,.9,.25,1),box-shadow .25s ease;pointer-events:auto;cursor:grab;touch-action:none}
+            #zanka-dynamic-island:active{cursor:grabbing}
             #zanka-dynamic-island[data-tone="clear"]{--tone:#30d158} #zanka-dynamic-island[data-tone="warning"]{--tone:#ffd60a} #zanka-dynamic-island[data-tone="danger"]{--tone:#ff453a} #zanka-dynamic-island[data-tone="info"]{--tone:#0a84ff} #zanka-dynamic-island[data-tone="purple"]{--tone:#bf5af2}
             #zanka-dynamic-island.is-expanded{box-shadow:0 8px 26px rgba(0,0,0,.52),0 0 18px color-mix(in srgb,var(--tone) 32%,transparent),inset 0 0 0 1px rgba(255,255,255,.11)}
             #zanka-dynamic-island .zanka-island-icon{width:18px;height:18px;flex:0 0 18px;object-fit:contain;transition:opacity .18s ease,transform .22s ease}
@@ -530,11 +660,13 @@
             #zanka-dynamic-island .zanka-island-text{overflow:hidden;text-overflow:ellipsis;opacity:1;transform:translateY(0);transition:opacity .18s ease,transform .18s ease}
             #zanka-dynamic-island.content-changing .zanka-island-text{opacity:0;transform:translateY(3px)}
             #zanka-dynamic-island.content-changing .zanka-island-icon{opacity:.3;transform:scale(.82)}
-            #zanka-basin-row{position:fixed;z-index:2147482999;left:50%;top:128px;transform:translateX(-50%);display:flex;gap:14px;align-items:flex-start;pointer-events:none;transition:opacity .2s ease}
+            #zanka-basin-row{position:fixed;z-index:2147482999;left:50%;top:128px;transform:translateX(-50%);display:flex;gap:14px;align-items:flex-start;pointer-events:auto;cursor:grab;touch-action:none;transition:opacity .2s ease}
             #zanka-basin-row.is-hidden{opacity:0;visibility:hidden}
             #zanka-brand-logo{position:fixed;z-index:2147483001;width:44px;height:44px;left:calc(50% - 112px);top:28px;object-fit:contain;transform:translate(-100%,-50%);filter:drop-shadow(0 4px 10px rgba(0,0,0,.38));pointer-events:none;display:block;opacity:1}
             #zanka-weather-panel{position:fixed;z-index:2147482998;width:224px;box-sizing:border-box;padding:12px;border-radius:16px;background:rgba(17,18,21,.82);border:1px solid rgba(255,255,255,.13);box-shadow:0 12px 30px rgba(0,0,0,.36);backdrop-filter:blur(15px) saturate(135%);-webkit-backdrop-filter:blur(15px) saturate(135%);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;transition:left .24s ease,right .24s ease;pointer-events:auto}
-            #zanka-weather-panel .zanka-weather-title{font-size:11px;font-weight:800;letter-spacing:.03em;color:#2997ff;margin:0 0 8px}
+            #zanka-weather-panel .zanka-weather-title{font-size:11px;font-weight:800;letter-spacing:.03em;color:#2997ff;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;cursor:grab;touch-action:none;user-select:none}
+            #zanka-weather-panel .zanka-weather-close{width:22px;height:22px;border:0;border-radius:50%;background:transparent;color:#fff;font-size:17px;line-height:1;opacity:.72;cursor:pointer;padding:0}#zanka-weather-panel .zanka-weather-close:hover{opacity:1;background:rgba(255,255,255,.1)}
+            #zanka-weather-fab{position:fixed;z-index:2147482998;width:42px;height:42px;border:1px solid rgba(255,255,255,.18);border-radius:50%;display:none;align-items:center;justify-content:center;background:rgba(10,14,22,.9);box-shadow:0 10px 30px rgba(0,0,0,.34);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);cursor:pointer;padding:0;pointer-events:auto}#zanka-weather-fab img{width:22px;height:22px}
             #zanka-weather-panel .zanka-weather-row{height:31px;display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:7px;padding:0 8px;margin:5px 0;border-radius:10px;background:rgba(255,255,255,.055);box-shadow:inset 0 0 0 1px rgba(255,255,255,.035)}
             #zanka-weather-panel .zanka-weather-row img{width:17px;height:17px;object-fit:contain}
             #zanka-weather-panel .zanka-weather-row span{font-size:10.5px;opacity:.78;white-space:nowrap}
@@ -556,10 +688,12 @@
         islandRoot = document.createElement('div');
         islandRoot.id = 'zanka-dynamic-island';
         islandRoot.innerHTML = `<img class="zanka-island-icon" alt=""><span class="zanka-island-dot"></span><span class="zanka-island-text"></span>`;
+        islandRoot.addEventListener('pointerdown', event => startDrag('top', event));
         document.body.appendChild(islandRoot);
 
         basinRoot = document.createElement('div');
         basinRoot.id = 'zanka-basin-row';
+        basinRoot.addEventListener('pointerdown', event => startDrag('top', event));
         document.body.appendChild(basinRoot);
 
         brandRoot = document.createElement('img');
@@ -576,6 +710,19 @@
         weatherRoot = document.createElement('div');
         weatherRoot.id = 'zanka-weather-panel';
         document.body.appendChild(weatherRoot);
+
+        weatherFabRoot = document.createElement('button');
+        weatherFabRoot.id = 'zanka-weather-fab';
+        weatherFabRoot.type = 'button';
+        weatherFabRoot.title = 'Időjárási panel megjelenítése';
+        weatherFabRoot.setAttribute('aria-label', 'Időjárási panel megjelenítése');
+        weatherFabRoot.innerHTML = `<img src="${asset('weather-temperature.svg')}" alt="">`;
+        weatherFabRoot.addEventListener('click', () => setWeatherOpen(true));
+        document.body.appendChild(weatherFabRoot);
+
+        topPosition = (() => { const p = readSavedPoint('zanka.topPosition', { x: NaN, y: NaN }); return Number.isFinite(p.x) ? p : null; })();
+        weatherPosition = readSavedPoint('zanka.weatherPosition', weatherPosition);
+        settingsPosition = readSavedPoint('zanka.settingsPosition', settingsPosition);
 
         renderIslandContent(fireBaseNotice(), false);
         renderBasinIcons();
@@ -596,11 +743,13 @@
         basinRoot?.remove();
         brandRoot?.remove();
         weatherRoot?.remove();
+        weatherFabRoot?.remove();
         portalStyle?.remove();
         islandRoot = null;
         basinRoot = null;
         brandRoot = null;
         weatherRoot = null;
+        weatherFabRoot = null;
         portalStyle = null;
     }
 
@@ -610,6 +759,7 @@
             if (basinRoot && basinRoot.parentElement !== document.body) document.body.appendChild(basinRoot);
             if (brandRoot && brandRoot.parentElement !== document.body) document.body.appendChild(brandRoot);
             if (weatherRoot && weatherRoot.parentElement !== document.body) document.body.appendChild(weatherRoot);
+            if (weatherFabRoot && weatherFabRoot.parentElement !== document.body) document.body.appendChild(weatherFabRoot);
             schedulePositionUpdate();
         });
         bodyObserver.observe(document.body, { childList: true, subtree: true });
@@ -688,7 +838,7 @@
         let top = 88;
         if (logo) {
             centerX = logo.left + logo.width / 2;
-            top = logo.bottom + 8;
+            top = logo.bottom + 2;
         }
         if (brandRoot) {
             // The Windy logo detector can briefly fail while Windy rebuilds its header.
@@ -703,19 +853,14 @@
             brandRoot.style.display = 'block';
             brandRoot.style.opacity = '1';
         }
-        islandRoot.style.left = `${Math.round(centerX)}px`;
-        islandRoot.style.top = `${Math.round(top)}px`;
-        basinRoot.style.left = `${Math.round(centerX)}px`;
-        basinRoot.style.top = `${Math.round(top + ISLAND_HEIGHT + 10)}px`;
-
-        if (weatherRoot) {
-            const paneLeft = findRightPaneLeft();
-            const rightEdge = paneLeft ?? window.innerWidth - 18;
-            weatherRoot.style.left = `${Math.round(Math.max(12, rightEdge - 224 - 14))}px`;
-            const modelTop = findModelBarTop();
-            const preferredTop = modelTop ? modelTop - weatherRoot.offsetHeight - 12 : window.innerHeight - weatherRoot.offsetHeight - 150;
-            weatherRoot.style.top = `${Math.round(Math.max(150, preferredTop))}px`;
+        if (topPosition) applyTopPosition();
+        else {
+            islandRoot.style.left = `${Math.round(centerX)}px`;
+            islandRoot.style.top = `${Math.round(top)}px`;
+            basinRoot.style.left = `${Math.round(centerX)}px`;
+            basinRoot.style.top = `${Math.round(top + ISLAND_HEIGHT + 10)}px`;
         }
+        applyWeatherPosition();
     }
 
     function renderBasinIcons() {
@@ -863,6 +1008,7 @@
         window.removeEventListener('orientationchange', schedulePositionUpdate);
         document.removeEventListener('pointerdown', unlockAudio, true);
         document.removeEventListener('keydown', unlockAudio, true);
+        window.removeEventListener('pointermove', handleDragMove);
         stopLightning();
         if (audioContext) { void audioContext.close(); audioContext = null; }
         destroyPortalUi();
@@ -871,6 +1017,26 @@
 </script>
 
 <style lang="less">
+    .zanka-embedded-host { position: fixed; inset: 0; z-index: 10020; pointer-events: none; }
+    .zanka-settings-fab {
+        position: fixed; top: 88px; left: 18px; width: 38px; height: 38px; border: 1px solid rgba(255,255,255,.20);
+        border-radius: 50%; color: #fff; background: rgba(10,14,22,.90); box-shadow: 0 10px 30px rgba(0,0,0,.34);
+        backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); cursor: pointer; pointer-events: auto;
+        font: 700 20px/1 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif; display:flex; align-items:center; justify-content:center;
+    }
+    .zanka-settings-fab.is-open { opacity: 0; pointer-events: none; }
+    .zanka-floating-settings {
+        position: fixed; top: 520px; left: 18px; width: min(320px, calc(100vw - 36px)); max-height: calc(100vh - 112px); overflow: auto;
+        padding: 12px; box-sizing: border-box; pointer-events: auto; color: #fff; border-radius: 18px;
+        background: rgba(17,24,39,.92); border: 1px solid rgba(255,255,255,.16); box-shadow: 0 18px 55px rgba(0,0,0,.42);
+        backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    }
+    .zanka-panel-title { display:flex; align-items:center; justify-content:space-between; gap:12px; font-weight:800; font-size:15px; margin:0 0 8px; }
+    .zanka-drag-handle { cursor: grab; touch-action: none; user-select: none; }
+    .zanka-drag-handle:active { cursor: grabbing; }
+    :global(html.zanka-is-dragging), :global(html.zanka-is-dragging *) { cursor: grabbing !important; user-select: none !important; }
+    .zanka-panel-title button { border:0; background:transparent; color:#fff; opacity:.75; font-size:22px; line-height:1; padding:2px 4px; cursor:pointer; border-radius:8px; }
+    .zanka-panel-title button:hover { opacity:1; background:rgba(255,255,255,.10); }
     .zanka-panel { padding-top: 6px; }
     .status-row { display:flex; align-items:center; gap:8px; margin:8px 0 10px; font-size:12px; opacity:.92; }
     .online,.offline { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
